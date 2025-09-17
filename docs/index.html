@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Message Display Window | 信息提示窗口</title>
+  <meta name="description" content="Message Display Window | 信息提示窗口">
+  <style>
+    :root{
+      --bg: #0b1220;
+      --fg: #e6eef8;
+      --accent: #4fc3f7;
+      --maxw: 900px;
+      font-family: Inter, system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg)}
+    .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:28px}
+    .card{width:100%;max-width:var(--maxw);background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:28px;box-shadow:0 8px 30px rgba(2,6,23,0.6);}
+    h1{margin:0 0 10px;font-size:clamp(18px,2.4vw,32px);}
+    p.msg{white-space:pre-wrap;font-size:clamp(16px,2vw,22px);margin:0 0 16px}
+    .meta{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.03);font-size:13px}
+    .controls{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap}
+    button{cursor:pointer;border:0;padding:8px 12px;border-radius:8px;background:var(--accent);color:#022;font-weight:600}
+    a.example{color:var(--accent);text-decoration:none}
+    footer{margin-top:18px;font-size:13px;color:rgba(230,238,248,0.6)}
+    /* full-screen mode */
+    .fullscreen{position:fixed;inset:0;padding:48px;display:flex;align-items:center;justify-content:center}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" id="card">
+      <h1 id="title">提示</h1>
+      <p class="msg" id="message">这是默认提示信息。你可以通过 URL 参数来自定义显示的标题、内容、颜色与背景。</p>
+
+      <div class="meta" id="meta"></div>
+
+      <div class="controls">
+        <button id="copyBtn">复制当前链接</button>
+        <button id="resetBtn">重置参数</button>
+        <a id="openNew" class="example" target="_blank" rel="noopener">在新页面打开示例</a>
+      </div>
+
+      <footer>
+        支持的参数：<code>title</code>、<code>text</code>、<code>color</code>、<code>bg</code>、<code>size</code>（字体大小 px） 、<code>align</code>（left/center/right）、<code>fullscreen</code>（true 显示边距为全屏） 、<code>timeout</code>（毫秒，自动隐藏）。
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    // 安全地从 URL 参数读取并渲染文本 —— 使用 textContent 避免 XSS
+    function parseAndApply() {
+      const params = new URLSearchParams(location.search);
+      const title = params.get('title') || '提示';
+      const text = params.get('text') || params.get('message') || '这是默认提示信息。你可以通过 URL 参数自定义。';
+      const color = params.get('color');
+      const bg = params.get('bg');
+      const size = params.get('size');
+      const align = params.get('align');
+      const fullscreen = (params.get('fullscreen') || '').toLowerCase() === 'true';
+      const timeout = parseInt(params.get('timeout') || '0', 10);
+
+      document.getElementById('title').textContent = decodeURIComponent(title);
+      document.getElementById('message').textContent = decodeURIComponent(text.replace(/\\+/g, ' '));
+
+      const card = document.getElementById('card');
+      if (color) card.style.color = color;
+      if (bg) card.style.background = bg;
+      if (size && !Number.isNaN(Number(size))) document.querySelector('.msg').style.fontSize = Number(size) + 'px';
+      if (align) document.querySelector('.msg').style.textAlign = align;
+      if (fullscreen) card.classList.add('fullscreen'); else card.classList.remove('fullscreen');
+
+      // 展示元信息（方便调试）
+      const meta = document.getElementById('meta');
+      meta.innerHTML = '';
+      for (const [k,v] of params.entries()) {
+        const span = document.createElement('span');
+        span.className = 'chip';
+        span.textContent = k + '=' + v;
+        meta.appendChild(span);
+      }
+
+      // 自动消失
+      if (!Number.isNaN(timeout) && timeout > 0) {
+        setTimeout(() => {
+          card.style.display = 'none';
+        }, timeout);
+      }
+
+      // 更新“在新页面打开示例”链接为当前 URL
+      document.getElementById('openNew').href = location.href;
+    }
+
+    // 复制当前 URL
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        alert('已复制链接到剪贴板');
+      } catch (e) {
+        prompt('请手动复制下面的链接：', location.href);
+      }
+    });
+
+    // 重置（去掉所有 query 参数）
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      history.replaceState({}, '', location.pathname);
+      parseAndApply();
+    });
+
+    // 初次渲染
+    parseAndApply();
+
+    // 监听 URL 变化（支持 pushState 的单页面操作）
+    window.addEventListener('popstate', parseAndApply);
+  </script>
+
+  <!-- 简单使用示例：
+    1) 只替换文字： https://<your-username>.github.io/<repo>/github-pages-message.html?title=你好&text=欢迎使用+GitHub+Pages
+    2) 自定义颜色和背景： ...?title=注意&text=维护中&color=%23011111&bg=%23ffd54f
+    3) 全屏并在3秒后消失： ...?text=自动隐藏&fullscreen=true&timeout=3000
+  -->
+</body>
+</html>
